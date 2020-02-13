@@ -1,6 +1,7 @@
 # The following comment should be removed at some point in the future.
 # mypy: disallow-untyped-defs=False
 
+import ast
 import codecs
 import os
 import sys
@@ -16,13 +17,28 @@ def read(rel_path):
         return fp.read()
 
 
+def extract_global_vars(t):
+    m = ast.parse(t)
+    res = {}
+    for s in m.body:
+        if isinstance(s, ast.Assign):
+            try:
+                v = ast.literal_eval(s.value)
+                for t in s.targets:
+                    if isinstance(t, ast.Name):
+                        res[t.id] = v
+            except ValueError:
+                continue
+
+    return res
+
+
 def get_version(rel_path):
-    for line in read(rel_path).splitlines():
-        if line.startswith('__version__'):
-            # __version__ = "0.9"
-            delim = '"' if '"' in line else "'"
-            return line.split(delim)[1]
-    raise RuntimeError("Unable to find version string.")
+    res = extract_global_vars(read(rel_path))
+    ver = res.get('__version__', None)
+    if ver is None:
+        raise RuntimeError("Unable to find version string.")
+    return ver
 
 
 long_description = read('README.rst')
